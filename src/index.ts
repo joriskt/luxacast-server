@@ -4,31 +4,16 @@ import { Client } from './client';
 import { Group } from './group';
 import { WebSocket } from 'ws';
 import addWs from 'express-ws';
+import config from './config';
 import winston from 'winston';
 
-winston.level = 'debug';
-winston.add(
-    new winston.transports.Console({
-        level: 'debug',
-        format: winston.format.combine(
-            winston.format.timestamp({
-                format: 'dd-MM-YYYY HH:mm:ss.SSS',
-            }),
-            winston.format.colorize(),
-            winston.format.printf((info) => `${info.timestamp} [${info.level}] ${info.message}`)
-        ),
-    })
-);
-
 /*
-    ExpresJS
+    ExpressJS
 */
 
 const app = express();
 addWs(app);
-
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
 const router = express.Router();
 
@@ -43,18 +28,12 @@ function getGroup(name: string) {
 }
 
 function prune() {
-    let visited: number = 0;
-    let pruned: number = 0;
-
     for (const [name, group] of Object.entries(groups)) {
-        visited++;
-
         // We don't prune groups so long as there are sockets listening to them.
         if (group.isAlive()) {
             continue;
         }
 
-        pruned++;
         delete groups[name];
         winston.verbose(`Pruning group: ${name}`);
     }
@@ -63,25 +42,45 @@ function prune() {
 setInterval(prune, 60000);
 
 /*
-    Rest API
+    STATE API
 */
 
-router.get('/:groupId', (req: Request<{ groupId: string }>, res: Response) => {
+router.get('/:groupId/state', (req: Request<{ groupId: string }>, res: Response) => {
     const group: Group = getGroup(req.params.groupId);
     return res.status(200).json(group.getAll());
 });
 
-router.put('/:groupId/:key', (req: Request<{ groupId: string; key: string }>, res: Response) => {
-    const group: Group = getGroup(req.params.groupId);
-    group.set(req.params.key);
-    return res.status(200).json(group.getAll());
-});
+router.put(
+    '/:groupId/state/:key',
+    (req: Request<{ groupId: string; key: string }>, res: Response) => {
+        const group: Group = getGroup(req.params.groupId);
 
-router.delete('/:groupId/:key', (req: Request<{ groupId: string; key: string }>, res: Response) => {
-    const group: Group = getGroup(req.params.groupId);
-    group.delete(req.params.key);
-    return res.status(200).json(group.getAll());
-});
+        // TODO: Add support for other data types.
+        group.set(req.params.key, true);
+        return res.status(200).json(group.getAll());
+    }
+);
+
+router.delete(
+    '/:groupId/state/:key',
+    (req: Request<{ groupId: string; key: string }>, res: Response) => {
+        const group: Group = getGroup(req.params.groupId);
+        group.delete(req.params.key);
+        return res.status(200).json(group.getAll());
+    }
+);
+
+/*
+    EVENT API
+*/
+
+// router.post(
+//     '/:groupId/event',
+//     (req: Request<{ groupId: string; event: string }>, res: Response) => {
+//         const group: Group = getGroup(req.params.groupId);
+//         group.broadcastEvent(req.params.event, req.body);
+//     }
+// );
 
 /*
     WebSockets
@@ -116,4 +115,5 @@ router.ws('/:groupId', (ws: WebSocket, req: Request) => {
 */
 
 app.use(router);
-app.listen(8080);
+app.listen(config.APP_PORT);
+winston.info(`Listening on port ${config.APP_PORT}`);

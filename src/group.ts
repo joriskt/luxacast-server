@@ -1,3 +1,4 @@
+import { EventPacket, Packet, eventPacket, statePacket } from './packet';
 import winston, { Logger } from 'winston';
 
 import { Client } from './client';
@@ -18,28 +19,28 @@ export class Group {
         this.clients = [];
         this.expires = DateTime.now().plus({ minutes: 30 });
 
-        this.logger = winston.createLogger({
-            level: 'debug',
-            transports: [
-                new winston.transports.Console({
-                    format: winston.format.combine(
-                        winston.format.padLevels(),
-                        winston.format.timestamp({
-                            format: 'dd-MM-YYYY HH:mm:ss.SSS',
-                        }),
-                        winston.format.colorize(),
-                        winston.format.printf((info) => {
-                            const padding: number =
-                                info.message.length - info.message.trimLeft().length;
-
-                            return `${info.timestamp} ${colors.gray(`[group:${this.name}]`)} [${
-                                ' '.repeat(padding - 1) + info.level
-                            }] ${info.message.trim()}`;
-                        })
-                    ),
-                }),
-            ],
+        this.logger = winston.child({
+            group: this.name,
         });
+    }
+
+    /*
+        Network
+    */
+
+    private broadcast(packet: Packet): void {
+        this.logger.verbose(`Broadcasting: ${JSON.stringify(packet)}`);
+        for (const client of this.clients.values()) {
+            client.send(packet);
+        }
+    }
+
+    private broadcastState(): void {
+        this.broadcast(statePacket(this.data));
+    }
+
+    broadcastEvent(event: string, payload: any): void {
+        this.broadcast(eventPacket(event, payload));
     }
 
     /*
@@ -51,7 +52,7 @@ export class Group {
         this.logger.info(`Subscribed: ${client.id}`);
 
         // Important: Send the initial state to the client!
-        client.socket.send(JSON.stringify(this.data));
+        client.send(statePacket(this.data));
     }
 
     unsubscribe(client: Client): void {
@@ -59,17 +60,6 @@ export class Group {
         this.clients = this.clients.filter((cl) => cl != client);
         this.expires = DateTime.now().plus({ hours: 4 });
         this.logger.info(`Unsubscribed: ${client.id}`);
-    }
-
-    private broadcast(data: any): void {
-        this.logger.verbose(`Broadcasting: ${data}`);
-        for (const value of this.clients.values()) {
-            value.socket.send(data);
-        }
-    }
-
-    private broadcastData(): void {
-        this.broadcast(JSON.stringify(this.data));
     }
 
     /*
@@ -84,16 +74,16 @@ export class Group {
         return this.data[key] || false;
     }
 
-    set(key: string): void {
+    set(key: string, value: string | number | boolean | null): void {
         this.logger.debug(`Setting: ${key}`);
         this.data[key] = true;
-        this.broadcastData();
+        this.broadcastState();
     }
 
     delete(key: string): void {
         this.logger.debug(`Deleting: ${key}`);
         delete this.data[key];
-        this.broadcastData();
+        this.broadcastState();
     }
 
     /*

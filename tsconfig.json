@@ -8,10 +8,12 @@
         "strict": true,
         "preserveConstEnums": true,
         "moduleResolution": "node",
-        "sourceMap": true,
+        "sourceMap": false,
         "esModuleInterop": true,
-        "types": ["node"]
+        "types": ["node"],
+        "declaration": true,
+        "declarationMap": true
     },
-    "include": ["src"],
+    "include": ["src", "dist"],
     "exclude": ["node_modules", "dist", "test"]
 }
