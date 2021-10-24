@@ -115,5 +115,5 @@ router.ws('/:groupId', (ws: WebSocket, req: Request) => {
 */
 
 app.use(router);
-app.listen(config.APP_PORT);
+app.listen(config.APP_PORT, config.APP_HOST);
 winston.info(`Listening on port ${config.APP_PORT}`);

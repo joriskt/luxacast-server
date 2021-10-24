@@ -6,6 +6,6 @@ WORKDIR /app
 COPY dist ./dist
 COPY package.json .
 
-RUN npm install --production
+RUN yarn install --production
 
 CMD ["node", "dist/index.js"]
